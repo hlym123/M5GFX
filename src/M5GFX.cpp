@@ -1924,9 +1924,10 @@ The usage of each pin is as follows.
         bus_spi->release();
         for (auto pin: backup_pins) { pin.restore(); }
       }
-
+      
       if (board == 0 || board == board_t::board_M5StickS3)
       {
+        ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5StickS3");
         gpio::pin_backup_t backup_pins[] = { GPIO_NUM_21, GPIO_NUM_39, GPIO_NUM_40, GPIO_NUM_41, GPIO_NUM_45, GPIO_NUM_47, GPIO_NUM_48 };
         auto result = lgfx::gpio::command(
           (const uint8_t[]) {
@@ -1938,9 +1939,10 @@ The usage of each pin is as follows.
           }
         );
         if (result == 0x03) {
-          _pin_reset(GPIO_NUM_21, use_reset); // LCD RST
+          // LCD RST
+          _pin_reset(GPIO_NUM_21, use_reset); 
           bus_cfg.pin_mosi = GPIO_NUM_39;
-          bus_cfg.pin_miso = (gpio_num_t)-1; //GPIO_NUM_NC;
+          bus_cfg.pin_miso = GPIO_NUM_NC;
           bus_cfg.pin_sclk = GPIO_NUM_40;
           bus_cfg.pin_dc   = GPIO_NUM_45;
           bus_cfg.spi_mode = 0;
@@ -1951,24 +1953,18 @@ The usage of each pin is as follows.
           if ((id & 0xFB) == 0x81) // 0x81 or 0x85
           { //  check panel (ST7789)
             board = board_t::board_M5StickS3;
-            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5StickS3");
+            static constexpr uint8_t m5_pm1_i2c_addr = 0x6E;
+            lgfx::i2c::init(I2C_NUM_1, GPIO_NUM_47, GPIO_NUM_48);
 
-            static constexpr uint8_t py32pmic_i2c_addr = 0x6E;
-            lgfx::i2c::init(i2c_port, GPIO_NUM_47, GPIO_NUM_48);
-            uint8_t reg_tmp[8];
-            reg_tmp[3] = 0x04; // set read target = reg0x04
-            m5gfx::i2c::transactionWriteRead(i2c_port, py32pmic_i2c_addr, &reg_tmp[3], 1, &reg_tmp[4], 4, 100000);
-            // ::printf("PY32PMIC %02x %02x %02x %02x\n", reg_tmp[4], reg_tmp[5], reg_tmp[6], reg_tmp[7]);
-            reg_tmp[4] |= 0b00001100; // REG0x04 GPIO_MODE : gpio2 (PYG2_L3B_EN) set 1 (output mode)
-            reg_tmp[5] |= 0b00000100; // REG0x05 GPIO_OUT  : gpio2 (PYG2_L3B_EN) set 1 (HIGH)
-            reg_tmp[7] &= 0b11110011; // REG0x07 GPIO_DRV  : gpio2 (PYG2_L3B_EN) set 0 (push-pull)
-            m5gfx::i2c::transactionWrite(i2c_port, py32pmic_i2c_addr, &reg_tmp[3], 5, 100000);
+            int i2c_speed = 100000;
 
-            reg_tmp[0] = 0x10; // set read target = reg0x10
-            m5gfx::i2c::transactionWriteRead(i2c_port, py32pmic_i2c_addr, &reg_tmp[0], 1, &reg_tmp[1], 1, 100000);
-            // ::printf("PY32PMIC %02x %02x %02x %02x\n", reg_tmp[4], reg_tmp[5], reg_tmp[6], reg_tmp[7]);
-            reg_tmp[1] &= 0b00001111; // REG0x10 GPIO_FUNC0 : gpio2 set 0b00 (GPIO function)
-            m5gfx::i2c::transactionWrite(i2c_port, py32pmic_i2c_addr, &reg_tmp[0], 2, 100000);
+            // L3B Enable, LCD Power On (M5Stack PM1 G2)
+            lgfx::i2c::bitOff(I2C_NUM_1, m5_pm1_i2c_addr, 0x16, 1 << 2, i2c_speed); // Set pin gpio2 as gpio function
+            lgfx::i2c::bitOn(I2C_NUM_1, m5_pm1_i2c_addr, 0x10, 1 << 2, i2c_speed);  // Set pin gpio2 mode: output
+            lgfx::i2c::bitOff(I2C_NUM_1, m5_pm1_i2c_addr, 0x13, 1 << 2, i2c_speed); // Set gpio2 push-pull mode: reg:0x13
+            lgfx::i2c::bitOn(I2C_NUM_1, m5_pm1_i2c_addr, 0x11, 1 << 2, i2c_speed);  // Set gpio2 output high: reg:0x05
+
+            lgfx::delay(100);
 
             bus_spi->release();
             bus_cfg.spi_host = SPI3_HOST;
@@ -1983,16 +1979,16 @@ The usage of each pin is as follows.
               cfg.pin_rst = GPIO_NUM_21;
               cfg.panel_width = 135;
               cfg.panel_height = 240;
-              cfg.offset_x     = 52;
-              cfg.offset_y     = 40;
+              cfg.offset_x = 52;
+              cfg.offset_y = 40;
+              cfg.offset_rotation = 0;
               cfg.readable = true;
               cfg.invert = true;
               cfg.bus_shared = false;
               p->config(cfg);
             }
             _panel_last.reset(p);
-            _set_pwm_backlight(GPIO_NUM_38, 7, 44100, false, 0);
-  
+            _set_pwm_backlight(GPIO_NUM_38, 7, 256, false, 16);
             goto init_clear;
           }
           bus_spi->release();
