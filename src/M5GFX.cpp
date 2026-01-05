@@ -1541,31 +1541,56 @@ namespace m5gfx
         bus_spi->config(bus_cfg);
         bus_spi->init();
         id = _read_panel_id(bus_spi, GPIO_NUM_15);
-        if ((id & 0xFFFFFF) == 0x079100)
-        {  //  check panel (GC9107)
+        bool is_st7735 = (id & 0xFF) == 0x7c;
+        bool is_gc9107 = (id & 0xFFFFFF) == 0x079100;
+
+        if (is_st7735 || is_gc9107)
+        {
           board = board_t::board_M5AtomS3;
-          ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3");
           bus_spi->release();
           bus_cfg.spi_host = SPI3_HOST;
           bus_cfg.freq_write = 40000000;
           bus_cfg.freq_read  = 16000000;
           bus_spi->config(bus_cfg);
           bus_spi->init();
-          auto p = new Panel_GC9107();
-          p->bus(bus_spi);
+          if (is_st7735) {
+            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3 (ST7735)");
+            auto p = new lgfx::Panel_ST7735S();
+            p->bus(bus_spi);
+            {
+              auto cfg = p->config();
+              cfg.pin_cs  = GPIO_NUM_15;
+              cfg.pin_rst = GPIO_NUM_34;
+              cfg.panel_width = 128;
+              cfg.panel_height = 128;
+              cfg.offset_x = 2;
+              cfg.offset_y = 31;
+              cfg.offset_rotation = 2;
+              cfg.readable = true;
+              cfg.bus_shared = false;
+              cfg.invert = true;
+              p->config(cfg);
+            }
+            _panel_last.reset(p);
+          } else // if (is_gc9107)
           {
-            auto cfg = p->config();
-            cfg.pin_cs  = GPIO_NUM_15;
-            cfg.pin_rst = GPIO_NUM_34;
-            cfg.panel_width = 128;
-            cfg.panel_height = 128;
-            cfg.offset_y = 32;
-            cfg.readable = false;
-            p->config(cfg);
+            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3 (GC9107)");
+            auto p = new Panel_GC9107();
+            p->bus(bus_spi);
+            {
+              auto cfg = p->config();
+              cfg.pin_cs  = GPIO_NUM_15;
+              cfg.pin_rst = GPIO_NUM_34;
+              cfg.panel_width = 128;
+              cfg.panel_height = 128;
+              cfg.offset_y = 32;
+              cfg.readable = false;
+              cfg.bus_shared = false;
+              p->config(cfg);
+            }
+            _panel_last.reset(p);
           }
-          _panel_last.reset(p);
           _set_pwm_backlight(GPIO_NUM_16, 7, 256, false, 48);
-
           goto init_clear;
         }
         bus_spi->release();
@@ -1842,35 +1867,132 @@ The usage of each pin is as follows.
         bus_spi->config(bus_cfg);
         bus_spi->init();
         id = _read_panel_id(bus_spi, GPIO_NUM_14);
-        if ((id & 0xFFFFFF) == 0x079100)
-        {  //  check panel (GC9107)
+        bool is_st7735 = (id & 0xFF) == 0x7c;
+        bool is_gc9107 = (id & 0xFFFFFF) == 0x079100;
+//      ESP_LOGI(LIBRARY_NAME, "[Autodetect] panel_id: 0x%08x", id);
+        if (is_st7735 || is_gc9107)
+        {
           board = board_t::board_M5AtomS3R;
-          ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3R");
           bus_spi->release();
           bus_cfg.spi_host = SPI3_HOST;
           bus_cfg.freq_write = 40000000;
           bus_cfg.freq_read  = 16000000;
           bus_spi->config(bus_cfg);
           bus_spi->init();
-          auto p = new Panel_GC9107();
-          p->bus(bus_spi);
+          if (is_st7735)
+          {  //  check panel (ST7735S)
+            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3R (ST7735)");
+            auto p = new lgfx::Panel_ST7735S();
+            p->bus(bus_spi);
+            {
+              auto cfg = p->config();
+              cfg.pin_cs  = GPIO_NUM_14;
+              cfg.pin_rst = GPIO_NUM_48;
+              cfg.panel_width = 128;
+              cfg.panel_height = 128;
+              cfg.offset_x = 2;
+              cfg.offset_y = 31;
+              cfg.offset_rotation = 2;
+              cfg.readable = true;
+              cfg.bus_shared = false;
+              cfg.invert = true;
+              p->config(cfg);
+            }
+            _panel_last.reset(p);
+          } else // if (is_gc9107)
           {
-            auto cfg = p->config();
-            cfg.pin_cs  = GPIO_NUM_14;
-            cfg.pin_rst = GPIO_NUM_48;
-            cfg.panel_width = 128;
-            cfg.panel_height = 128;
-            cfg.offset_y = 32;
-            cfg.readable = false;
-            cfg.bus_shared = false;
-            p->config(cfg);
+            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3R (GC9107)");
+            auto p = new Panel_GC9107();
+            p->bus(bus_spi);
+            {
+              auto cfg = p->config();
+              cfg.pin_cs  = GPIO_NUM_14;
+              cfg.pin_rst = GPIO_NUM_48;
+              cfg.panel_width = 128;
+              cfg.panel_height = 128;
+              cfg.offset_y = 32;
+              cfg.readable = false;
+              cfg.bus_shared = false;
+              p->config(cfg);
+            }
+            _panel_last.reset(p);
           }
-          _panel_last.reset(p);
           _set_backlight(new Light_M5StackAtomS3R());
 
           goto init_clear;
         }
         bus_spi->release();
+        for (auto pin: backup_pins) { pin.restore(); }
+      }
+      
+      if (board == 0 || board == board_t::board_M5StickS3)
+      {
+        gpio::pin_backup_t backup_pins[] = { GPIO_NUM_21, GPIO_NUM_39, GPIO_NUM_40, GPIO_NUM_41, GPIO_NUM_45, GPIO_NUM_47, GPIO_NUM_48 };
+        auto result = lgfx::gpio::command(
+          (const uint8_t[]) {
+          lgfx::gpio::command_mode_input_pulldown, GPIO_NUM_47,
+          lgfx::gpio::command_mode_input_pulldown, GPIO_NUM_48,
+          lgfx::gpio::command_read               , GPIO_NUM_47,
+          lgfx::gpio::command_read               , GPIO_NUM_48,
+          lgfx::gpio::command_end
+          }
+        );
+        if (result == 0x03) {
+          // LCD RST
+          _pin_reset(GPIO_NUM_21, use_reset); 
+          bus_cfg.pin_mosi = GPIO_NUM_39;
+          bus_cfg.pin_miso = GPIO_NUM_NC;
+          bus_cfg.pin_sclk = GPIO_NUM_40;
+          bus_cfg.pin_dc   = GPIO_NUM_45;
+          bus_cfg.spi_mode = 0;
+          bus_cfg.spi_3wire = true;
+          bus_spi->config(bus_cfg);
+          bus_spi->init();
+          id = _read_panel_id(bus_spi, GPIO_NUM_41);
+          if ((id & 0xFB) == 0x81) // 0x81 or 0x85
+          { //  check panel (ST7789)
+            ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5StickS3");
+            board = board_t::board_M5StickS3;
+            static constexpr uint8_t m5_pm1_i2c_addr = 0x6E;
+            lgfx::i2c::init(I2C_NUM_1, GPIO_NUM_47, GPIO_NUM_48);
+
+            int i2c_speed = 100000;
+
+            // L3B Enable, LCD Power On (M5Stack PM1 G2)
+            lgfx::i2c::bitOff(I2C_NUM_1, m5_pm1_i2c_addr, 0x16, 1 << 2, i2c_speed); // Set pin gpio2 as gpio function
+            lgfx::i2c::bitOn(I2C_NUM_1, m5_pm1_i2c_addr, 0x10, 1 << 2, i2c_speed);  // Set pin gpio2 mode: output
+            lgfx::i2c::bitOff(I2C_NUM_1, m5_pm1_i2c_addr, 0x13, 1 << 2, i2c_speed); // Set gpio2 push-pull mode: reg:0x13
+            lgfx::i2c::bitOn(I2C_NUM_1, m5_pm1_i2c_addr, 0x11, 1 << 2, i2c_speed);  // Set gpio2 output high: reg:0x05
+
+            lgfx::delay(100);
+
+            bus_spi->release();
+            bus_cfg.spi_host = SPI3_HOST;
+            bus_cfg.freq_write = 40000000;
+            bus_cfg.freq_read  = 16000000;
+            bus_spi->config(bus_cfg);
+            auto p = new Panel_ST7789();
+            p->bus(bus_spi);
+            {
+              auto cfg = p->config();
+              cfg.pin_cs = GPIO_NUM_41;
+              cfg.pin_rst = GPIO_NUM_21;
+              cfg.panel_width = 135;
+              cfg.panel_height = 240;
+              cfg.offset_x = 52;
+              cfg.offset_y = 40;
+              cfg.offset_rotation = 0;
+              cfg.readable = true;
+              cfg.invert = true;
+              cfg.bus_shared = false;
+              p->config(cfg);
+            }
+            _panel_last.reset(p);
+            _set_pwm_backlight(GPIO_NUM_38, 7, 256, false, 16);
+            goto init_clear;
+          }
+          bus_spi->release();
+        }
         for (auto pin: backup_pins) { pin.restore(); }
       }
 
@@ -1984,7 +2106,7 @@ The usage of each pin is as follows.
                 auto p = new Panel_ILI9881C();
                 _panel_last.reset(p);
                 auto det = p->config_detail();
-                det.dpi_freq_mhz = 60;
+                det.dpi_freq_mhz = 80;
                 det.hsync_back_porch = 140;
                 det.hsync_pulse_width = 40;
                 det.hsync_front_porch = 40;
@@ -2318,6 +2440,7 @@ init_clear:
     case board_M5StickC:       title = "M5StickC";       break;
     case board_M5StickCPlus:   title = "M5StickCPlus";   break;
     case board_M5StickCPlus2:  title = "M5StickCPlus2";  break;
+    case board_M5StickS3:      title = "M5StickS3";      break;
     case board_M5StackCoreInk: title = "M5StackCoreInk"; break;
     case board_M5Paper:        title = "M5Paper";        break;
     case board_M5PaperS3:      title = "M5PaperS3";      break;
@@ -2376,6 +2499,7 @@ init_clear:
 
     case board_M5StickCPlus:
     case board_M5StickCPlus2:
+    case board_M5StickS3:
     case board_M5DinMeter:
     case board_M5StampPLC:
     case board_ArduinoNessoN1:
