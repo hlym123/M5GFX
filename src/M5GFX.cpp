@@ -1788,10 +1788,16 @@ namespace m5gfx
         bus_spi->config(bus_cfg);
         bus_spi->init();
         id = _read_panel_id(bus_spi, GPIO_NUM_14);
+        ESP_LOGI("LIBRARY_NAME", "==============================");
+        ESP_LOGI("LIBRARY_NAME", "[Autodetect] panel_id: 0x%08x", id);
+        printf("panel_id: 0x%08x\n", id);
+        printf("==============================\n");
+
         if ((id & 0xFFFFFF) == 0x079100)
         {  //  check panel (GC9107)
           board = board_t::board_M5AtomS3R;
           ESP_LOGI(LIBRARY_NAME, "[Autodetect] board_M5AtomS3R");
+          ESP_LOGI(LIBRARY_NAME, "[Autodetect] panel_id: 0x%08x", id);
           bus_spi->release();
           bus_cfg.spi_host = SPI3_HOST;
           bus_cfg.freq_write = 40000000;
@@ -1809,6 +1815,38 @@ namespace m5gfx
             cfg.offset_y = 32;
             cfg.readable = false;
             cfg.bus_shared = false;
+            p->config(cfg);
+          }
+          _panel_last.reset(p);
+          _set_backlight(new Light_M5StackAtomS3R());
+
+          goto init_clear;
+        }
+        ESP_LOGI("atoms3r", ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+        if (id == 0x00f0897c)
+        {  //  check panel (ST7735)
+          board = board_t::board_M5AtomS3R;
+          ESP_LOGI("atoms3r", "[Autodetect] board_M5AtomS3R");
+          ESP_LOGI("atoms3r", "[Autodetect] panel_id: 0x%08x (ST7735)", id);
+          bus_spi->release();
+          bus_cfg.spi_host = SPI3_HOST;
+          bus_cfg.freq_write = 40000000;
+          bus_cfg.freq_read  = 16000000;
+          bus_spi->config(bus_cfg);
+          bus_spi->init();
+          auto p = new lgfx::Panel_ST7735S();
+          p->bus(bus_spi);
+          {
+            auto cfg = p->config();
+            cfg.pin_cs  = GPIO_NUM_14;
+            cfg.pin_rst = GPIO_NUM_48;
+            cfg.panel_width = 128;
+            cfg.panel_height = 128;
+            cfg.offset_x = 2;
+            cfg.offset_y = 2;
+            cfg.readable = false;
+            cfg.bus_shared = false;
+            cfg.invert = true;  // 反转颜色格式
             p->config(cfg);
           }
           _panel_last.reset(p);

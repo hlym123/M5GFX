@@ -50,6 +50,16 @@ namespace lgfx // This should not be changed to "m5gfx"
     , board_M5AtomEcho
     , board_M5AtomS3RExt
     , board_M5AtomS3RCam
+    , board_M5AtomVoiceS3R = 145
+    , board_M5AtomEchoS3R __attribute__ ((deprecated)) = board_M5AtomVoiceS3R
+    , board_M5PowerHub = 146
+    , board_M5DualKey = 147
+    , board_M5UnitPoEP4 = 148
+    , board_M5StampS3Bat = 149
+    , board_M5StampP4 = 150
+    , board_M5StampC5 = 153
+    , board_M5StampC6 = 154
+    , board_M5StampS3Mini = 155
 
 /// external displays
     , board_M5AtomDisplay = 192
